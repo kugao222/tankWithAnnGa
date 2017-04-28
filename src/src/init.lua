@@ -1,5 +1,5 @@
 --print("-------src init ")
-package.path = package.path..";./src/?.lua;"
+--package.path = package.path..";./src/?.lua;"
 --print(package.path)
 
 -- 全局变量
