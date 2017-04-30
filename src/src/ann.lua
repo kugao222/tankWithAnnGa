@@ -84,6 +84,7 @@ function t:stimulate(inputs)
 	end
 
 	--dump(curOutputs, "----------Outputs")
+	return curOutputs
 end
 
 

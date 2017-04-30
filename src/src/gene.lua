@@ -25,7 +25,7 @@ end
 -- 更新适应性值
 function t:updateFitness() -- func:打分函数
 	local func = self.population.fitnessMeasurementFunc
-	self.fitness = func(self.geneBitList)
+	self.fitness = func(self.geneBitList) or self.fitness
 end
 
 -- 变异

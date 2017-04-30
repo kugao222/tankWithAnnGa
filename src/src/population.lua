@@ -51,12 +51,15 @@ function t:ctor(t)
 	self.fitnessNagtiveAdjust = {on=false}
 
 	-- 
-	self:updateAllFitness()
+	--self:updateAllFitness()
 	print(" ==>> all genes inited !")
 end
 
 -- 生产下一代
 function t:epoch(jumpOutFitnessLevel) -- func:打分函数
+	-- 2. 更新每条基因的适应性值
+	self:updateAllFitness()
+	
 	-- 1. crossover & 变异
 	local list = self.list
 	local count = #list
@@ -70,9 +73,6 @@ function t:epoch(jumpOutFitnessLevel) -- func:打分函数
 		listNewGeneration[curCount+2] = c2
 	end
 	self.list = listNewGeneration
-	
-	-- 2. 更新每条基因的适应性值
-	self:updateAllFitness()
 
 	--
 	--print("------------------------------------------------------------")
