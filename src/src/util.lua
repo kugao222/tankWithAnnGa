@@ -13,7 +13,7 @@ local p = 10000-- p小数点后面几位
 local tp = p*2
 local dp = 1/p
 function t.randWeight()  
-	return (math.random(0,tp)-p) * dp
+	return 0.1--(math.random(0,tp)-p) * dp
 end
 
 function t.exp(v)  

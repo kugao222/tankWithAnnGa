@@ -14,6 +14,8 @@ local function _neuronCreateHelper(numOfInputs)
 	for i=1,num do
 		neuronT[i] = _randWeight()
 	end
+	neuronT.activation = 0 -- 激励值
+	neuronT.error = 0 -- 误差
 	--neuronT[num] = -1 -- shift
 	return neuronT
 end
@@ -39,6 +41,18 @@ function t:ctor(hln,hlnn, inputNum,outputNum)
 	-- input&ouput
 	self.inputNum = inputNum
 	self.outputNum = outputNum
+
+	-- 
+	self.learningRate = 0.5
+
+	--
+	self.errorSum = 9999999
+
+	--
+	self.isTrained = false
+
+	--
+	self.numEpochs = 0
 
 	-- create
 	self:constructLayers()
@@ -87,7 +101,86 @@ function t:stimulate(inputs)
 	return curOutputs
 end
 
+---- 训练 ------------------------------------------
+function t:training(inputsList,outputsList)
+	local errorSum
+	while 1 do
+		self:trainingEpoch(inputsList,outputsList)
+		self.numEpochs = self.numEpochs + 1
+		if self.errorSum <= 0.003 then
+			break
+		end
+	end
+	--self:trainingEpoch(inputsList,outputsList)
+end
 
+function t:trainingEpoch(inputsList,outputsList) -- 这里只放入一个
+	local errorSum = 0
+	local learningRate = self.learningRate
+
+	--
+	local layers = self.layers
+	local hiddenLayerNum = self.hiddenLayerNum
+	local hiddenLayerNeuronNum = self.hiddenLayerNeuronNum
+	local outputLayer = layers[hiddenLayerNum+1]
+	local fisrtNeuron = outputLayer[1]
+	local weightNum = fisrtNeuron.num -- 输出层neuron 的weight数
+
+	local hiddenLayer = layers[hiddenLayerNum]
+
+	-- 输出层
+	local outputNum = self.outputNum
+	local inputNum = self.inputNum
+	local err, outputs, outputsT
+	local opsV,opsVT,posVD, curNeuron, curWeight, curHiddenNeuron
+	for i,v in ipairs(inputsList) do -- 每一个训练集
+		outputs = self:stimulate(v)
+		outputsT = outputsList[i]
+
+		--
+		for op=1,outputNum do -- 每一个输出单位
+			opsV = outputs[op]
+			opsVT = outputsT[op]
+			posVD = opsVT-opsV
+			curNeuron = outputLayer[op]
+			--
+			err = posVD*opsV*(1-opsV)
+			curNeuron.error = err
+			errorSum = errorSum + posVD*posVD
+			--
+			for j=1,weightNum do
+				curHiddenNeuron = hiddenLayer[j]
+				curNeuron[j] = curNeuron[j]+err*learningRate*curHiddenNeuron.activation
+				--print("--curNeuron[j] == "..curNeuron[j])
+			end
+			curNeuron[weightNum+1] = curNeuron[weightNum+1]+err*learningRate*-1;
+		end
+
+		-- 针对每一个hidden layer的单元
+		local curNrnHid
+		for op=1,hiddenLayerNeuronNum do -- 每一个hidden单位
+			err = 0
+			for j=1,outputNum do
+				curNeuron = outputLayer[j]
+				err=err+curNeuron.error*curNeuron[op]
+			end
+			curNrnHid = hiddenLayer[op]
+			err = err*curNrnHid.activation*(1-curNrnHid.activation)
+
+			for w=1,inputNum do
+				curNrnHid[w] = curNrnHid[w] + err*learningRate*v[w]
+			end
+
+			curNrnHid[inputNum+1] = curNrnHid[inputNum+1]+err*learningRate*-1;
+		end
+
+		outputs = nil
+	end
+
+	self.errorSum = errorSum
+
+	return true
+end
 
 ---- 辅助 ------------------------------------------
 local curOutputsReuse = {}
@@ -114,6 +207,7 @@ function t:stimulateNeuron(neuron, inputs)
 
 	-- 偏移
 	accum = self:impel(accum + neuron[num+1]*(-1))
+	neuron.activation = accum
 
 	return accum
 end
