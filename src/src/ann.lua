@@ -7,6 +7,10 @@ local _randWeight = util.randWeight
 local _exp = util.exp
 local define = gb.define
 
+-- 冲量
+local _MOMENTUM = 0.9
+local _MAX_NOISE_TO_ADD = 0.1
+
 -- neuron
 local function _neuronCreateHelper(numOfInputs)
 	local num = numOfInputs+1 -- shift output
@@ -16,6 +20,7 @@ local function _neuronCreateHelper(numOfInputs)
 	end
 	neuronT.activation = 0 -- 激励值
 	neuronT.error = 0 -- 误差
+	neuronT.preUpdate = {}
 	--neuronT[num] = -1 -- shift
 	return neuronT
 end
@@ -80,11 +85,22 @@ end
 
 -- 一次刺激
 local outputsReusedEmpty = {}
-function t:stimulate(inputs)
+function t:stimulate(inputs, noiseFactor)
+	noiseFactor = noiseFactor or 0
+
 	--
 	local inputsNumber = #inputs
 	local inputNum = self.inputNum
 	if inputNum ~= inputsNumber then return outputsReusedEmpty end
+
+	-- add noise
+	if noiseFactor > 0 then
+		local v
+		for i=1,inputNum do
+			v = inputs[i]
+			inputs[i] = v + util.randWeight()*noiseFactor --有正负
+		end
+	end
 
 	-- loop layer
 	local layers = self.layers
@@ -102,14 +118,21 @@ function t:stimulate(inputs)
 end
 
 ---- 训练 ------------------------------------------
+local textIdx = 0
 function t:training(inputsList,outputsList)
 	local errorSum
 	while 1 do
 		self:trainingEpoch(inputsList,outputsList)
 		self.numEpochs = self.numEpochs + 1
+		--print("self.errorSum == "..self.errorSum)
+		--print("numEpochs == "..self.numEpochs)
 		if self.errorSum <= 0.003 then
+			--print("self.numEpochs == "..self.numEpochs)
 			break
 		end
+
+		-- if textIdx > 10 then break end
+		-- textIdx = textIdx + 1
 	end
 	--self:trainingEpoch(inputsList,outputsList)
 end
@@ -125,16 +148,20 @@ function t:trainingEpoch(inputsList,outputsList) -- 这里只放入一个
 	local outputLayer = layers[hiddenLayerNum+1]
 	local fisrtNeuron = outputLayer[1]
 	local weightNum = fisrtNeuron.num -- 输出层neuron 的weight数
+	local weightNumAll = weightNum+1 -- 加上偏移
 
 	local hiddenLayer = layers[hiddenLayerNum]
+	local weightUpdate = 0
 
 	-- 输出层
 	local outputNum = self.outputNum
 	local inputNum = self.inputNum
 	local err, outputs, outputsT
-	local opsV,opsVT,posVD, curNeuron, curWeight, curHiddenNeuron
+	local opsV,opsVT,posVD, curNeuron,curNeuronPreUpdate, curWeight, curHiddenNeuron
+	local preWeightV = nil
+	local MOMENTUM = _MOMENTUM
 	for i,v in ipairs(inputsList) do -- 每一个训练集
-		outputs = self:stimulate(v)
+		outputs = self:stimulate(v, _MAX_NOISE_TO_ADD)
 		outputsT = outputsList[i]
 
 		--
@@ -143,17 +170,24 @@ function t:trainingEpoch(inputsList,outputsList) -- 这里只放入一个
 			opsVT = outputsT[op]
 			posVD = opsVT-opsV
 			curNeuron = outputLayer[op]
+			curNeuronPreUpdate = curNeuron.preUpdate
 			--
 			err = posVD*opsV*(1-opsV)
 			curNeuron.error = err
 			errorSum = errorSum + posVD*posVD
-			--
+
+			---- n+1
 			for j=1,weightNum do
 				curHiddenNeuron = hiddenLayer[j]
-				curNeuron[j] = curNeuron[j]+err*learningRate*curHiddenNeuron.activation
-				--print("--curNeuron[j] == "..curNeuron[j])
+				weightUpdate = err*learningRate*curHiddenNeuron.activation
+				preWeightV = curNeuronPreUpdate[j] or 0
+				curNeuron[j] = curNeuron[j]+weightUpdate+preWeightV*MOMENTUM
+				curNeuronPreUpdate[j] = weightUpdate
 			end
-			curNeuron[weightNum+1] = curNeuron[weightNum+1]+err*learningRate*-1;
+			weightUpdate = err*learningRate*-1
+			preWeightV = curNeuronPreUpdate[j] or 0
+			curNeuron[weightNumAll] = curNeuron[weightNumAll]+weightUpdate+preWeightV*MOMENTUM
+			curNeuronPreUpdate[weightNumAll] = weightUpdate
 		end
 
 		-- 针对每一个hidden layer的单元
@@ -165,16 +199,23 @@ function t:trainingEpoch(inputsList,outputsList) -- 这里只放入一个
 				err=err+curNeuron.error*curNeuron[op]
 			end
 			curNrnHid = hiddenLayer[op]
+			curNeuronPreUpdate = curNrnHid.preUpdate
 			err = err*curNrnHid.activation*(1-curNrnHid.activation)
 
+			---- n+1
 			for w=1,inputNum do
-				curNrnHid[w] = curNrnHid[w] + err*learningRate*v[w]
+				weightUpdate = err*learningRate*v[w]
+				preWeightV = curNeuronPreUpdate[w] or 0
+				curNrnHid[w] = curNrnHid[w] + weightUpdate+preWeightV*MOMENTUM
+				curNeuronPreUpdate[w] = weightUpdate
 			end
-
-			curNrnHid[inputNum+1] = curNrnHid[inputNum+1]+err*learningRate*-1;
+			w = inputNum+1
+			weightUpdate = err*learningRate*-1
+			preWeightV = curNeuronPreUpdate[j] or 0
+			curNrnHid[w] = curNrnHid[w]+weightUpdate+preWeightV*MOMENTUM
+			curNeuronPreUpdate[w] = weightUpdate
 		end
-
-		outputs = nil
+		--outputs = nil
 	end
 
 	self.errorSum = errorSum
